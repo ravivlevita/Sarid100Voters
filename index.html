@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sarid100Voter - מתנדבים</title>
+<style>
+  :root { --bg:#f4f6f8; --card:#fff; --ink:#1b2733; --muted:#66727f; --blue:#1565c0; --green:#2e7d32; --amber:#ef6c00; --grey:#607d8b; --red:#c62828; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family: system-ui, "Segoe UI", Arial, sans-serif; }
+  main { max-width: 480px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin: 8px 0 16px; }
+  .card { background:var(--card); border-radius:14px; padding:18px; box-shadow:0 1px 4px rgba(0,0,0,.12); margin-bottom:14px; }
+  label { display:block; font-size:14px; color:var(--muted); margin:10px 0 4px; }
+  input { width:100%; font-size:18px; padding:12px; border:1px solid #c5ced6; border-radius:10px; }
+  button { width:100%; font-size:20px; font-weight:600; padding:16px; border:0; border-radius:12px; color:#fff; background:var(--blue); margin-top:10px; cursor:pointer; }
+  button:disabled { opacity:.5; }
+  .green { background:var(--green); } .amber { background:var(--amber); } .grey { background:var(--grey); }
+  .name { font-size:28px; font-weight:700; margin:0 0 6px; }
+  .meta { color:var(--muted); font-size:16px; margin:2px 0; }
+  .phone { display:block; text-align:center; font-size:26px; font-weight:700; text-decoration:none; color:#fff; background:var(--green); padding:16px; border-radius:12px; margin:14px 0; direction:ltr; }
+  .row3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+  .row3 button { font-size:17px; padding:14px 4px; }
+  #msg { text-align:center; color:var(--red); min-height:22px; font-size:15px; }
+  .who { display:flex; justify-content:space-between; align-items:center; color:var(--muted); font-size:14px; }
+  .who a { color:var(--blue); cursor:pointer; }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Sarid100Voter – שיחות מתנדבים</h1>
+
+  <section id="login" class="card hidden">
+    <label for="nameIn">השם שלך</label>
+    <input id="nameIn" autocomplete="name">
+    <label for="codeIn">קוד צוות</label>
+    <input id="codeIn" type="password" autocomplete="off">
+    <button id="saveBtn">התחלה</button>
+  </section>
+
+  <section id="work" class="hidden">
+    <div class="who"><span>מתנדב/ת: <b id="whoName"></b></span><a id="logout">החלפת משתמש</a></div>
+    <div id="voter" class="card hidden" style="margin-top:10px">
+      <p class="name" id="vName"></p>
+      <p class="meta" id="vFamily"></p>
+      <p class="meta" id="vExtra"></p>
+      <a class="phone" id="vPhone" href="#"></a>
+      <div class="row3">
+        <button class="green" data-out="voted">הצביע</button>
+        <button class="amber" data-out="noanswer">אין מענה</button>
+        <button class="grey" data-out="pass">דלג</button>
+      </div>
+    </div>
+    <div id="empty" class="card hidden">אין כרגע מצביעים פנויים. נסו שוב בעוד כמה דקות.</div>
+    <button id="nextBtn">מצביע הבא</button>
+  </section>
+  <p id="msg"></p>
+</main>
+
+<script>
+// Paste the deployed Apps Script web app URL here.
+const API = 'https://script.google.com/macros/s/AKfycbwiTvKcGLOuDO238FPabknVv0wdkoPvRyFqgaP-6stp1dmuNGU_M4fgfH2KjOvgN8xQJg/exec';
+
+const $ = (id) => document.getElementById(id);
+const store = {
+  get: (k) => { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } },
+  set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} },
+  del: (k) => { try { localStorage.removeItem(k); } catch (e) {} }
+};
+let current = null;
+
+function say(t) { $('msg').textContent = t || ''; }
+
+async function call(payload) {
+  payload.name = store.get('name');
+  payload.code = store.get('code');
+  // text/plain avoids a CORS preflight, which Apps Script does not answer
+  const res = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload) });
+  return res.json();
+}
+
+function show() {
+  const logged = store.get('name') && store.get('code');
+  $('login').classList.toggle('hidden', !!logged);
+  $('work').classList.toggle('hidden', !logged);
+  $('whoName').textContent = store.get('name');
+}
+
+function render(v) {
+  current = v;
+  $('empty').classList.toggle('hidden', !!v);
+  $('voter').classList.toggle('hidden', !v);
+  $('nextBtn').classList.toggle('hidden', !!v);
+  if (!v) return;
+  $('vName').textContent = v.name;
+  $('vFamily').textContent = v.family ? 'משפחה: ' + v.family : '';
+  $('vExtra').textContent = [v.age ? 'גיל ' + v.age : '', v.tries ? 'ניסיון מס׳ ' + (v.tries + 1) : '', v.notes || ''].filter(Boolean).join(' · ');
+  const digits = v.phone.replace(/[^\d+]/g, '');
+  $('vPhone').textContent = v.phone || 'אין טלפון';
+  $('vPhone').href = digits ? 'tel:' + digits : '#';
+}
+
+function errText(e) {
+  if (e === 'bad code') return 'קוד צוות שגוי';
+  if (e === 'taken') return 'המצביע הזה נלקח על ידי מתנדב אחר';
+  return 'שגיאה: ' + e;
+}
+
+async function next() {
+  say('טוען...'); $('nextBtn').disabled = true;
+  try {
+    const r = await call({ action: 'next' });
+    if (!r.ok) { say(errText(r.error)); if (r.error === 'bad code') { store.del('code'); show(); } return; }
+    say(''); render(r.voter);
+  } catch (e) { say('אין חיבור, נסו שוב'); }
+  finally { $('nextBtn').disabled = false; }
+}
+
+async function finish(outcome) {
+  if (!current) return;
+  document.querySelectorAll('[data-out]').forEach(b => b.disabled = true);
+  say('שומר...');
+  try {
+    const r = await call({ action: 'done', id: current.id, outcome });
+    if (!r.ok) { say(errText(r.error)); if (r.error === 'taken') render(null); return; }
+    say('נשמר ✓'); render(null);
+  } catch (e) { say('לא נשמר, נסו שוב'); }
+  finally { document.querySelectorAll('[data-out]').forEach(b => b.disabled = false); }
+}
+
+$('saveBtn').onclick = () => {
+  const n = $('nameIn').value.trim(), c = $('codeIn').value.trim();
+  if (!n || !c) { say('נא למלא שם וקוד'); return; }
+  store.set('name', n); store.set('code', c); say(''); show();
+};
+$('logout').onclick = () => { store.del('name'); store.del('code'); render(null); show(); };
+$('nextBtn').onclick = next;
+document.querySelectorAll('[data-out]').forEach(b => b.onclick = () => finish(b.dataset.out));
+show();
+</script>
+</body>
+</html>
