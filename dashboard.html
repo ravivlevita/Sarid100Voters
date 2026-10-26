@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sarid100Voter – דשבורד</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    direction: rtl; font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; color: #fff;
+    background: linear-gradient(145deg, #0d3d3d 0%, #0a2e3d 50%, #0d3347 100%); min-height: 100vh; padding: 14px;
+  }
+  main { max-width: 900px; margin: 0 auto; }
+  .top { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .top img { width: 64px; }
+  .top h1 { font-size: 20px; flex: 1; }
+  .top a { color: rgba(255,255,255,.7); font-size: 13px; text-decoration: none; border: 1px solid rgba(255,255,255,.25); border-radius: 10px; padding: 6px 12px; }
+  .card { background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.1); border-radius: 16px; padding: 14px; margin-bottom: 12px; }
+  .big { text-align: center; }
+  .big .num { font-size: 44px; font-weight: 800; }
+  .big .of { font-size: 15px; color: rgba(255,255,255,.65); }
+  .bar { height: 14px; background: rgba(255,255,255,.12); border-radius: 8px; overflow: hidden; margin-top: 10px; position: relative; }
+  .bar > div { height: 100%; background: #22c55e; width: 0; transition: width .5s; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+  .kpi { text-align: center; }
+  .kpi .v { font-size: 28px; font-weight: 800; }
+  .kpi .l { font-size: 13px; color: rgba(255,255,255,.65); margin-top: 2px; }
+  .ctl { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; font-size: 14px; flex-wrap: wrap; }
+  .ctl button { background: rgba(255,255,255,.1); color: #fff; border: 1px solid rgba(255,255,255,.2); border-radius: 8px; padding: 6px 12px; font-size: 13px; font-family: inherit; cursor: pointer; }
+  .ctl button.on { background: #0e7490; border-color: #0e7490; }
+  .chartbox { position: relative; height: 320px; direction: ltr; }
+  #upd { font-size: 12px; color: rgba(255,255,255,.45); text-align: center; margin-top: 6px; }
+  #err { color: #fca5a5; text-align: center; min-height: 18px; font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <img src="https://konenutsarid.github.io/SaridEmergencyForms/Sarid100Logo.png" alt="">
+    <h1>דשבורד הצבעה</h1>
+    <a href="manager.html">חזרה</a>
+  </div>
+
+  <div class="card big">
+    <div class="num"><span id="voted">–</span></div>
+    <div class="of">הצביעו מתוך יעד של <b id="target">–</b> (80% מ־<span id="total">–</span> בעלי זכות בחירה)</div>
+    <div class="bar"><div id="fill"></div></div>
+    <div class="of" style="margin-top:8px"><b id="pct">–</b> מהיעד · חסרים <b id="gap">–</b></div>
+  </div>
+
+  <div class="grid">
+    <div class="card kpi"><div class="v" id="pctAll">–</div><div class="l">אחוז הצבעה מכלל הרשימה</div></div>
+    <div class="card kpi"><div class="v" id="noans">–</div><div class="l">אין מענה</div></div>
+    <div class="card kpi"><div class="v" id="pass">–</div><div class="l">דילגו</div></div>
+    <div class="card kpi"><div class="v" id="prog">–</div><div class="l">בטיפול כרגע</div></div>
+    <div class="card kpi"><div class="v" id="fresh">–</div><div class="l">טרם טופלו</div></div>
+  </div>
+
+  <div class="card">
+    <div class="ctl">
+      <span>רזולוציית זמן:</span>
+      <button data-m="15">15 דק׳</button>
+      <button data-m="30">30 דק׳</button>
+      <button data-m="60" class="on">שעה</button>
+    </div>
+    <div class="chartbox"><canvas id="chart"></canvas></div>
+  </div>
+  <div id="err"></div>
+  <div id="upd"></div>
+</main>
+
+<script>
+const API = 'https://script.google.com/macros/s/AKfycbwiTvKcGLOuDO238FPabknVv0wdkoPvRyFqgaP-6stp1dmuNGU_M4fgfH2KjOvgN8xQJg/exec';
+const TEAM_CODE = 'SARID-8Q4K';
+const $ = (id) => document.getElementById(id);
+let data = null, step = 60, chart = null;
+
+function hhmm(ms) { const d = new Date(ms); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+
+function drawChart() {
+  if (!data) return;
+  const votes = data.votes.slice().sort((a, b) => a - b);
+  const stepMs = step * 60000;
+  const labels = [], per = [], cum = [];
+  if (votes.length) {
+    const start = Math.floor(votes[0] / stepMs) * stepMs;
+    const end = Math.max(Math.floor(Date.now() / stepMs) * stepMs, start);
+    let i = 0, run = 0;
+    for (let t = start; t <= end; t += stepMs) {
+      let c = 0;
+      while (i < votes.length && votes[i] < t + stepMs) { c++; i++; }
+      run += c; labels.push(hhmm(t)); per.push(c); cum.push(run);
+    }
+  }
+  const target = labels.map(() => data.target);
+  const cfg = {
+    data: { labels, datasets: [
+      { type: 'bar', label: 'הצבעות בתקופה', data: per, backgroundColor: 'rgba(14,165,233,.7)', yAxisID: 'y1', order: 2 },
+      { type: 'line', label: 'מצטבר', data: cum, borderColor: '#22c55e', backgroundColor: '#22c55e', tension: .25, yAxisID: 'y', order: 1 },
+      { type: 'line', label: 'יעד 80%', data: target, borderColor: '#f59e0b', borderDash: [6, 6], pointRadius: 0, yAxisID: 'y', order: 0 }
+    ] },
+    options: { responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: { legend: { labels: { color: '#fff' } } },
+      scales: {
+        x: { ticks: { color: '#cbd5e1' }, grid: { color: 'rgba(255,255,255,.08)' } },
+        y: { position: 'left', beginAtZero: true, suggestedMax: data.target, ticks: { color: '#cbd5e1' }, grid: { color: 'rgba(255,255,255,.08)' }, title: { display: true, text: 'מצטבר', color: '#cbd5e1' } },
+        y1: { position: 'right', beginAtZero: true, ticks: { color: '#cbd5e1', precision: 0 }, grid: { drawOnChartArea: false }, title: { display: true, text: 'בתקופה', color: '#cbd5e1' } }
+      } }
+  };
+  if (chart) chart.destroy();
+  chart = new Chart($('chart'), cfg);
+}
+
+function render() {
+  const c = data.counts, v = c.Voted || 0;
+  $('voted').textContent = v; $('target').textContent = data.target; $('total').textContent = data.total;
+  const pct = Math.min(100, Math.round(v / data.target * 100));
+  $('fill').style.width = pct + '%'; $('pct').textContent = pct + '%';
+  $('gap').textContent = Math.max(0, data.target - v);
+  $('pctAll').textContent = Math.round(v / data.total * 100) + '%';
+  $('noans').textContent = c.NoAnswer || 0; $('pass').textContent = c.Pass || 0;
+  $('prog').textContent = c.InProgress || 0; $('fresh').textContent = c[''] || 0;
+  drawChart();
+}
+
+async function load() {
+  try {
+    const res = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'stats', code: TEAM_CODE, name: 'dashboard' }) });
+    const r = await res.json();
+    if (!r.ok) throw new Error(r.error);
+    data = r; $('err').textContent = ''; render();
+    $('upd').textContent = 'עודכן ' + hhmm(Date.now()) + ' · מתרענן אוטומטית כל 30 שניות';
+  } catch (e) { $('err').textContent = 'שגיאה בטעינת הנתונים: ' + e.message; }
+}
+
+document.querySelectorAll('[data-m]').forEach(b => b.onclick = () => {
+  step = Number(b.dataset.m);
+  document.querySelectorAll('[data-m]').forEach(x => x.classList.toggle('on', x === b));
+  drawChart();
+});
+load(); setInterval(load, 30000);
+</script>
+</body>
+</html>
