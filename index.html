@@ -34,8 +34,6 @@
   <section id="login" class="card hidden">
     <label for="nameIn">השם שלך</label>
     <input id="nameIn" autocomplete="name">
-    <label for="codeIn">קוד צוות</label>
-    <input id="codeIn" type="password" autocomplete="off">
     <button id="saveBtn">התחלה</button>
   </section>
 
@@ -61,6 +59,8 @@
 <script>
 // Paste the deployed Apps Script web app URL here.
 const API = 'https://script.google.com/macros/s/AKfycbwiTvKcGLOuDO238FPabknVv0wdkoPvRyFqgaP-6stp1dmuNGU_M4fgfH2KjOvgN8xQJg/exec';
+
+const TEAM_CODE = 'SARID-8Q4K';
 
 const $ = (id) => document.getElementById(id);
 const store = {
@@ -130,9 +130,9 @@ async function finish(outcome) {
 }
 
 $('saveBtn').onclick = () => {
-  const n = $('nameIn').value.trim(), c = $('codeIn').value.trim();
-  if (!n || !c) { say('נא למלא שם וקוד'); return; }
-  store.set('name', n); store.set('code', c); say(''); show();
+  const n = $('nameIn').value.trim();
+  if (!n) { say('נא למלא שם'); return; }
+  store.set('name', n); store.set('code', TEAM_CODE); say(''); show();
 };
 $('logout').onclick = () => { store.del('name'); store.del('code'); render(null); show(); };
 $('nextBtn').onclick = next;
