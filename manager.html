@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sarid100Voter – ניהול</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    direction: rtl;
+    font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
+    background: linear-gradient(145deg, #0d3d3d 0%, #0a2e3d 50%, #0d3347 100%);
+    min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 1rem;
+  }
+  .header { text-align: center; margin-bottom: 1.5rem; }
+  .header img { width: 130px; max-width: 40vw; margin-bottom: .6rem; }
+  .header h1 { font-size: 22px; font-weight: 800; color: #fff; margin-bottom: 4px; }
+  .header p { font-size: 13px; color: rgba(255,255,255,.55); }
+  .cards { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 420px; }
+  .btn {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    min-height: 64px; border-radius: 16px; border: 1px solid rgba(255,255,255,.12);
+    color: #fff; font-size: 18px; font-weight: 700; text-decoration: none; font-family: inherit;
+  }
+  .btn .icon { font-size: 26px; }
+  .btn.primary { background: #0e7490; }
+  .btn.secondary { background: rgba(255,255,255,.08); }
+  .btn:active { transform: scale(.98); }
+  .footer { margin-top: 1.5rem; font-size: 12px; color: rgba(255,255,255,.3); text-align: center; }
+</style>
+</head>
+<body>
+<div class="header">
+  <img src="https://konenutsarid.github.io/SaridEmergencyForms/Sarid100Logo.png" alt="קיבוץ שריד 100">
+  <h1>Sarid100Voter – ניהול</h1>
+  <p>מעקב הצבעה – קיבוץ שריד</p>
+</div>
+<div class="cards">
+  <a class="btn primary" href="dashboard.html"><span class="icon">📊</span> דשבורד הצבעה</a>
+  <a class="btn secondary" href="https://docs.google.com/spreadsheets/d/1Fkd-_u_Okc5E3FFVhlTGGhGEi2tCf3tkK8y-S02G2BY/edit" target="_blank" rel="noopener"><span class="icon">📄</span> פתיחת הגיליון</a>
+</div>
+<div class="footer">קיבוץ שריד • Sarid100Voter</div>
+</body>
+</html>
