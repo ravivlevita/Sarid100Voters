@@ -20,16 +20,16 @@
   .big { text-align: center; }
   .big .num { font-size: 44px; font-weight: 800; }
   .big .of { font-size: 15px; color: rgba(255,255,255,.65); }
-  .bar { height: 14px; background: rgba(255,255,255,.12); border-radius: 8px; overflow: hidden; margin-top: 10px; position: relative; }
+  .barwrap { position: relative; margin-top: 12px; padding-bottom: 24px; }
+  .bar { height: 14px; background: rgba(255,255,255,.12); border-radius: 8px; overflow: hidden; }
   .bar > div { height: 100%; background: #22c55e; width: 0; transition: width .5s; }
+  .mark { position: absolute; top: -5px; height: 24px; width: 3px; margin-right: -1px; background: #f59e0b; border-radius: 2px; }
+  .marklbl { position: absolute; top: 22px; font-size: 12px; font-weight: 700; color: #f59e0b; transform: translateX(50%); white-space: nowrap; }
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
   .kpi { text-align: center; }
   .kpi .v { font-size: 28px; font-weight: 800; }
   .kpi .l { font-size: 13px; color: rgba(255,255,255,.65); margin-top: 2px; }
-  .ctl { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; font-size: 14px; flex-wrap: wrap; }
-  .ctl button { background: rgba(255,255,255,.1); color: #fff; border: 1px solid rgba(255,255,255,.2); border-radius: 8px; padding: 6px 12px; font-size: 13px; font-family: inherit; cursor: pointer; }
-  .ctl button.on { background: #0e7490; border-color: #0e7490; }
-  .chartbox { position: relative; height: 320px; direction: ltr; }
+  .chartbox { position: relative; height: 340px; direction: ltr; }
   #upd { font-size: 12px; color: rgba(255,255,255,.45); text-align: center; margin-top: 6px; }
   #err { color: #fca5a5; text-align: center; min-height: 18px; font-size: 14px; }
 </style>
@@ -45,8 +45,11 @@
   <div class="card big">
     <div class="num"><span id="voted">–</span></div>
     <div class="of">הצביעו מתוך יעד של <b id="target">–</b> (80% מ־<span id="total">–</span> בעלי זכות בחירה)</div>
-    <div class="bar"><div id="fill"></div></div>
-    <div class="of" style="margin-top:8px"><b id="pct">–</b> מהיעד · חסרים <b id="gap">–</b></div>
+    <div class="barwrap">
+      <div class="bar"><div id="fill"></div></div>
+      <i class="mark" id="mark"></i><span class="marklbl" id="marklbl"></span>
+    </div>
+    <div class="of"><b id="pct">–</b> מהיעד · חסרים <b id="gap">–</b></div>
   </div>
 
   <div class="grid">
@@ -58,12 +61,6 @@
   </div>
 
   <div class="card">
-    <div class="ctl">
-      <span>רזולוציית זמן:</span>
-      <button data-m="15">15 דק׳</button>
-      <button data-m="30">30 דק׳</button>
-      <button data-m="60" class="on">שעה</button>
-    </div>
     <div class="chartbox"><canvas id="chart"></canvas></div>
   </div>
   <div id="err"></div>
@@ -73,40 +70,50 @@
 <script>
 const API = 'https://script.google.com/macros/s/AKfycbwiTvKcGLOuDO238FPabknVv0wdkoPvRyFqgaP-6stp1dmuNGU_M4fgfH2KjOvgN8xQJg/exec';
 const TEAM_CODE = 'SARID-8Q4K';
+const REFRESH = Number(new URLSearchParams(location.search).get('r')) || 30;
+const MIN = 60000;
 const $ = (id) => document.getElementById(id);
-let data = null, step = 60, chart = null;
+let data = null, chart = null;
 
 function hhmm(ms) { const d = new Date(ms); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
 
+// cumulative count at the end of each minute from startMs to endMs
+function cumulative(times, startMs, endMs) {
+  const sorted = times.slice().sort((a, b) => a - b);
+  const out = [];
+  let i = 0;
+  for (let t = startMs; t <= endMs; t += MIN) {
+    while (i < sorted.length && sorted[i] < t + MIN) i++;
+    out.push(i);
+  }
+  return out;
+}
+
 function drawChart() {
   if (!data) return;
-  const votes = data.votes.slice().sort((a, b) => a - b);
-  const stepMs = step * 60000;
-  const labels = [], per = [], cum = [];
-  if (votes.length) {
-    const start = Math.floor(votes[0] / stepMs) * stepMs;
-    const end = Math.max(Math.floor(Date.now() / stepMs) * stepMs, start);
-    let i = 0, run = 0;
-    for (let t = start; t <= end; t += stepMs) {
-      let c = 0;
-      while (i < votes.length && votes[i] < t + stepMs) { c++; i++; }
-      run += c; labels.push(hhmm(t)); per.push(c); cum.push(run);
-    }
+  const voted = data.votes || [], skipped = data.skips || [];
+  const all = voted.concat(skipped);
+  let labels = [], vSeries = [], sSeries = [];
+  if (all.length) {
+    const start = Math.floor(Math.min.apply(null, all) / MIN) * MIN;
+    const end = Math.max(Math.floor(Date.now() / MIN) * MIN, start);
+    for (let t = start; t <= end; t += MIN) labels.push(hhmm(t));
+    vSeries = cumulative(voted, start, end);
+    sSeries = cumulative(skipped, start, end);
   }
-  const target = labels.map(() => data.target);
+  const line = (label, d, color) => ({ label, data: d, borderColor: color, backgroundColor: color, borderWidth: 3, pointRadius: 0, pointHoverRadius: 4, tension: 0.2, fill: false });
   const cfg = {
-    data: { labels, datasets: [
-      { type: 'bar', label: 'הצבעות בתקופה', data: per, backgroundColor: 'rgba(14,165,233,.7)', yAxisID: 'y1', order: 2 },
-      { type: 'line', label: 'מצטבר', data: cum, borderColor: '#22c55e', backgroundColor: '#22c55e', tension: .25, yAxisID: 'y', order: 1 },
-      { type: 'line', label: 'יעד 80%', data: target, borderColor: '#f59e0b', borderDash: [6, 6], pointRadius: 0, yAxisID: 'y', order: 0 }
-    ] },
-    options: { responsive: true, maintainAspectRatio: false, animation: false,
-      plugins: { legend: { labels: { color: '#fff' } } },
+    type: 'line',
+    data: { labels, datasets: [line('הצביעו', vSeries, '#22c55e'), line('דילגו', sSeries, '#f59e0b')] },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { labels: { color: '#fff', font: { size: 14 } } } },
       scales: {
-        x: { ticks: { color: '#cbd5e1' }, grid: { color: 'rgba(255,255,255,.08)' } },
-        y: { position: 'left', beginAtZero: true, suggestedMax: data.target, ticks: { color: '#cbd5e1' }, grid: { color: 'rgba(255,255,255,.08)' }, title: { display: true, text: 'מצטבר', color: '#cbd5e1' } },
-        y1: { position: 'right', beginAtZero: true, ticks: { color: '#cbd5e1', precision: 0 }, grid: { drawOnChartArea: false }, title: { display: true, text: 'בתקופה', color: '#cbd5e1' } }
-      } }
+        x: { ticks: { color: '#cbd5e1', maxTicksLimit: 12, autoSkip: true }, grid: { color: 'rgba(255,255,255,.08)' } },
+        y: { beginAtZero: true, ticks: { color: '#cbd5e1', precision: 0 }, grid: { color: 'rgba(255,255,255,.08)' } }
+      }
+    }
   };
   if (chart) chart.destroy();
   chart = new Chart($('chart'), cfg);
@@ -116,7 +123,11 @@ function render() {
   const c = data.counts, v = c.Voted || 0;
   $('voted').textContent = v; $('target').textContent = data.target; $('total').textContent = data.total;
   const pct = Math.min(100, Math.round(v / data.target * 100));
-  $('fill').style.width = pct + '%'; $('pct').textContent = pct + '%';
+  // the bar shows votes against the whole list; the orange mark is the 80% target
+  const tp = data.target / data.total * 100;
+  $('fill').style.width = Math.min(100, v / data.total * 100) + '%';
+  $('mark').style.right = tp + '%'; $('marklbl').style.right = tp + '%'; $('marklbl').textContent = 'יעד ' + data.target;
+  $('pct').textContent = pct + '%';
   $('gap').textContent = Math.max(0, data.target - v);
   $('pctAll').textContent = Math.round(v / data.total * 100) + '%';
   $('noans').textContent = c.NoAnswer || 0; $('pass').textContent = c.Pass || 0;
@@ -130,16 +141,11 @@ async function load() {
     const r = await res.json();
     if (!r.ok) throw new Error(r.error);
     data = r; $('err').textContent = ''; render();
-    $('upd').textContent = 'עודכן ' + hhmm(Date.now()) + ' · מתרענן אוטומטית כל 30 שניות';
+    $('upd').textContent = 'עודכן ' + hhmm(Date.now()) + ' · מתרענן אוטומטית כל ' + REFRESH + ' שניות';
   } catch (e) { $('err').textContent = 'שגיאה בטעינת הנתונים: ' + e.message; }
 }
 
-document.querySelectorAll('[data-m]').forEach(b => b.onclick = () => {
-  step = Number(b.dataset.m);
-  document.querySelectorAll('[data-m]').forEach(x => x.classList.toggle('on', x === b));
-  drawChart();
-});
-load(); setInterval(load, 30000);
+load(); setInterval(load, REFRESH * 1000);
 </script>
 </body>
 </html>
